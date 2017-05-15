@@ -1,0 +1,1857 @@
+﻿{
+  "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vnetName": {
+      "type": "string",
+      "defaultValue": "VNET01",
+      "metadata": {
+        "description": "The name of the new Virtual Network to create. Do not include the Region location, this template will name the VNET based on the resource group location where is being deployed."
+      }
+    },
+    "vnetCIDR": {
+      "type": "string",
+      "defaultValue": "172.16.0.0/21",
+      "metadata": {
+        "description": "The IP Address Space for this new virtual Network. For medium networks, we recommend that this is at least a /21 so that you can create 9 additional subnets."
+      }
+    },
+    "environmentA": {
+      "type": "string",
+      "allowedValues": [
+        "Production",
+        "Staging",
+        "Test",
+        "Development",
+        "Q/A",
+        "Disaster Recovery",
+        "Other"
+      ],
+      "metadata": {
+        "description": "The Environment type we are building"
+      },
+      "defaultValue": "Production"
+    },
+    "subnetOPSCIDRA": {
+      "type": "string",
+      "defaultValue": "172.16.0.0/27",
+      "metadata": {
+        "description": "The IP Address Space of the OPS Subnet."
+      }
+    },
+    "subnetDBCIDRA": {
+      "type": "string",
+      "defaultValue": "172.16.2.0/24",
+      "metadata": {
+        "description": "The IP Address Space of the DB Subnet (Typically reserved for Databases)"
+      }
+    },
+    "subnetADCIDRA": {
+      "type": "string",
+      "defaultValue": "172.16.0.64/27",
+      "metadata": {
+        "description": "The IP Address Space of the Active Directory Subnet. (Reserved Exclusively for Active Directory Nodes)"
+      }
+    },
+    "subnetBASCIDR": {
+      "type": "string",
+      "defaultValue": "172.16.0.96/27",
+      "metadata": {
+        "description": "The IP Address Space of the Rackspace BASTion Subnet. (Reserved Exclusively for Rackspace Bastion Servers and/or additional Infrastructure servers needed for Rackspace support)"
+      }
+    },
+    "subnetAGWCIDRA": {
+      "type": "string",
+      "defaultValue": "172.16.7.0/27",
+      "metadata": {
+        "description": "The IP Address Space of the Application Gateway Subnet. (Reserved Exclusively for Application Gateways)"
+      }
+    },
+    "subnetGWCIDR": {
+      "type": "string",
+      "defaultValue": "172.16.7.192/27",
+      "metadata": {
+        "description": "The IP Address Space of the VPN Gateway Subnet."
+      }
+    },
+    "buildDate": {
+      "type": "string",
+      "metadata": {
+        "description": "The date of this build"
+      },
+      "defaultValue": "01/01/2999"
+    },
+    "buildBy": {
+      "type": "string",
+      "metadata": {
+        "description": "The name of the person who build this environment"
+      },
+      "defaultValue": "First Last"
+    }
+  },
+  "variables": {
+    "resourceGroupLocation": "[resourceGroup().location]",
+    "environmentLabel": {
+      "Production": "PRD",
+      "Staging": "STG",
+      "Test": "TST",
+      "Development": "DEV",
+      "Q/A": "QA",
+      "Disaster Recovery": "DR",
+      "Other": "OTR"
+    },
+    "resourceGroupLocationName": {
+      "eastasia": "EAS",
+      "southeastasia": "SEA",
+      "centralus": "CUS",
+      "eastus": "EUS",
+      "eastus2": "EU2",
+      "westus": "WUS",
+      "westus2": "WU2",
+      "westcentralus": "WCU",
+      "northcentralus": "NCU",
+      "southcentralus": "SCU",
+      "northeurope": "NEU",
+      "westeurope": "WEU",
+      "japanwest": "JPW",
+      "japaneast": "JPE",
+      "brazilsouth": "BZS",
+      "australiaeast": "AEA",
+      "australiasoutheast": "ASE",
+      "southindia": "SID",
+      "centralindia": "CID",
+      "westindia": "WID",
+      "canadacentral": "CAC",
+      "canadaeast": "CAE",
+      "ukwest": "UKW",
+      "uksouth": "UKS",
+      "chinaeast": "CEA",
+      "chinanorth": "CNO",
+      "germanycentral": "GEC",
+      "germanynorteast": "GNE"
+    },
+    "virtualNetworkName": "[concat(variables('resourceGroupLocationName')[variables('resourceGroupLocation')],'-', parameters('vnetName'))]",
+    "SubnetAGWNameA": "[concat(variables('virtualNetworkName'), '-AGW-',variables('environmentLabel')[parameters('environmentA')])]",
+    "subnetOPSNameA": "[concat(variables('virtualNetworkName'), '-OPS-', variables('environmentLabel')[parameters('environmentA')])]",
+    "subnetAPPNameA": "[concat(variables('virtualNetworkName'), '-APP-', variables('environmentLabel')[parameters('environmentA')])]",
+    "subnetDBNameA": "[concat(variables('virtualNetworkName'), '-DB-', variables('environmentLabel')[parameters('environmentA')])]",
+    "subnetADNameA": "[concat(variables('virtualNetworkName'), '-AD-',variables('environmentLabel')[parameters('environmentA')])]",
+    "subnetBASName": "[concat(variables('virtualNetworkName'), '-RBAST01')]",
+    "GWSubnetName": "GatewaySubnet",
+    "networkSecurityGroupAGWNameA": "[concat(variables('subnetAGWNameA'), '-NSG')]",
+    "networkSecurityGroupOPSNameA": "[concat(variables('subnetOPSNameA'), '-NSG')]",
+    "networkSecurityGroupAPPNameA": "[concat(variables('subnetAPPNameA'), '-NSG')]",
+    "networkSecurityGroupDBNameA": "[concat(variables('subnetDBNameA'), '-NSG')]",
+    "networkSecurityGroupADNameA": "[concat(variables('subnetADNameA'),  '-NSG')]",
+    "networkSecurityGroupBASName": "[concat(variables('subnetBASName'), '-NSG')]",
+    "rackspaceBastionDFW": "172.99.99.10/32",
+    "rackspaceBastionIAD": "146.20.2.10/32",
+    "rackspaceBastionORD": "161.47.0.10/32",
+    "rackspaceBastionHKG": "119.9.122.10/32",
+    "rackspaceBastionLON": "134.213.179.10/32",
+    "rackspaceBastionLON5": "134.213.178.10/32",
+    "rackspaceBastionSYD": "119.9.148.10/32",
+    "rackspacepBastionDFW": "72.3.186.100/32",
+    "rackspacepBastionIAD": "146.20.30.100/32",
+    "rackspacepBastionORD": "161.47.6.100/32",
+    "rackspacepBastionHKG": "120.136.39.100/32",
+    "rackspacepBastionLON": "134.213.183.100/32",
+    "rackspacepBastionLON5": "134.213.182.100/32",
+    "rackspacepBastionSYD": "119.9.163.100/32"
+  },
+  "resources": [
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupAGWNameA')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG-AGW",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_LOCAL_SUBNET_INBOUND",
+            "properties": {
+              "description": "Allows intra-subnet communication",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "destinationAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_AZURE_LB_INBOUND",
+            "properties": {
+              "description": "Allows inbound traffic from Azure Load Balancer",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "access": "Allow",
+              "priority": 111,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_HTTP_INBOUND",
+            "properties": {
+              "description": "Allows Web access HTTP(80)",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "80",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "access": "Allow",
+              "priority": 112,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_HTTPS_INBOUND",
+            "properties": {
+              "description": "Allows Web access HTTPS(443)",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "access": "Allow",
+              "priority": 113,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_ApplicationGateway_Health_Ports_INBOUND",
+            "properties": {
+              "description": "Allows Application gateway health ports as per https://docs.microsoft.com/en-us/azure/application-gateway/application-gateway-diagnostics",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "65503-65534",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "access": "Allow",
+              "priority": 114,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_UDP",
+            "properties": {
+              "description": "Deny all inbound UDP",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4000,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_TCP",
+            "properties": {
+              "description": "Deny all inbound TCP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4001,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupOPSNameA')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG-OPS",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_LOCAL_SUBNET_INBOUND",
+            "properties": {
+              "description": "Allows intra-subnet communication",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_AZURE_LB_INBOUND",
+            "properties": {
+              "description": "Allows inbound traffic from Azure Load Balancer",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 111,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_RDP_INBOUND",
+            "properties": {
+              "description": "Allows RDP inbound from local RBAST subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 112,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SSH_INBOUND",
+            "properties": {
+              "description": "Allows SSH inbound from local RBAST subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 113,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_WinRM_INBOUND",
+            "properties": {
+              "description": "Allows WinRM inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 114,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SFTBROKER_INBOUND",
+            "properties": {
+              "description": "Allows ScaleFT Broker agent inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "4421",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "access": "Allow",
+              "priority": 115,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_UDP",
+            "properties": {
+              "description": "Deny all inbound UDP",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4000,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_TCP",
+            "properties": {
+              "description": "Deny all inbound TCP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4001,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupDBNameA')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG-DB",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_LOCAL_SUBNET_INBOUND",
+            "properties": {
+              "description": "Allows intra-subnet communicaiton",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_AZURE_LB_INBOUND",
+            "properties": {
+              "description": "Allows SSH inbound from local RACK_BASTION subnet",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 111,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_RDP_INBOUND",
+            "properties": {
+              "description": "Allows RDP inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 112,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SSH_INBOUND",
+            "properties": {
+              "description": "Allows SSH inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 113,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_WinRM_INBOUND",
+            "properties": {
+              "description": "Allows WinRM inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 114,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SFTBROKER_INBOUND",
+            "properties": {
+              "description": "Allows ScaleFT Broker agent inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "4421",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetDBCIDRA')]",
+              "access": "Allow",
+              "priority": 115,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_UDP",
+            "properties": {
+              "description": "Deny all inbound UDP",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4000,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_TCP",
+            "properties": {
+              "description": "Deny all inbound TCP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4001,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupADNameA')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG-AD",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_LOCAL_SUBNET_INBOUND",
+            "properties": {
+              "description": "Allows intra-subnet communicaiton",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_AZURE_LB_INBOUND",
+            "properties": {
+              "description": "Allows SSH inbound from local RACK_BASTION subnet",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "AzureLoadBalancer",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 111,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_RDP_INBOUND",
+            "properties": {
+              "description": "Allows RDP inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 112,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SSH_INBOUND",
+            "properties": {
+              "description": "Allows SSH inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 113,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_WinRM_INBOUND",
+            "properties": {
+              "description": "Allows WinRM inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 114,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RACK_BASTION_SFTBROKER_INBOUND",
+            "properties": {
+              "description": "Allows ScaleFT Broker agent inbound from local RACK_BASTION subnet",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "4421",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 115,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_53",
+            "properties": {
+              "description": "Allow UDP 53",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "53",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_88",
+            "properties": {
+              "description": "Allow TCP and UDP 88",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "88",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 121,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_UDP_123",
+            "properties": {
+              "description": "Allow UDP 123",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "123",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 122,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_135",
+            "properties": {
+              "description": "Allow TCP 135",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "135",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 123,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_137",
+            "properties": {
+              "description": "Allow TCP and UDP 137",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "137",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 124,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_UDP_138",
+            "properties": {
+              "description": "Allow TCP 138",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "138",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 125,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_139",
+            "properties": {
+              "description": "Allow TCP 139",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "139",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 126,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_389",
+            "properties": {
+              "description": "Allow TCP and UDP 389",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "389",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 127,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_445",
+            "properties": {
+              "description": "Allow TCP and UDP 445",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "445",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 128,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_464",
+            "properties": {
+              "description": "Allow TCP and UDP 464",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "464",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 129,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_636",
+            "properties": {
+              "description": "Allow TCP 636",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "636",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 130,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_3268",
+            "properties": {
+              "description": "Allow TCP 3268",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3268",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 131,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_3269",
+            "properties": {
+              "description": "Allow TCP 3269",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3269",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 132,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_5722",
+            "properties": {
+              "description": "Allow TCP 5722",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5722",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 133,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_UDP_49152_65535",
+            "properties": {
+              "description": "Allow TCP and UDP 49152_65535",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "49152-65535",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 134,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_TCP_9389",
+            "properties": {
+              "description": "Allow TCP 9389",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "9389",
+              "sourceAddressPrefix": "VirtualNetwork",
+              "destinationAddressPrefix": "[parameters('subnetADCIDRA')]",
+              "access": "Allow",
+              "priority": 135,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_UDP",
+            "properties": {
+              "description": "Deny all inbound UDP",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4000,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_TCP",
+            "properties": {
+              "description": "Deny all inbound TCP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4001,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "apiVersion": "2015-05-01-preview",
+      "type": "Microsoft.Network/networkSecurityGroups",
+      "name": "[variables('networkSecurityGroupBASName')]",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "NSG-BASTION",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "properties": {
+        "securityRules": [
+          {
+            "name": "Allow_LOCAL_SUBNET_INBOUND",
+            "properties": {
+              "description": "Allows intra-subnet communicaiton",
+              "protocol": "*",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 110,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_DFW",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 111,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_IAD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 112,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_ORD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 113,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_HKG",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 114,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_LON",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 115,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_LON5",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 116,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_SYD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspaceBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 117,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_DFW",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 118,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_IAD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 119,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_ORD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 120,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_HKG",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 121,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_LON",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 122,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_LON5",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 123,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_SYD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspaceBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 124,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_DFW",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 125,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_IAD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 126,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_ORD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 127,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_HKG",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 128,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_LON",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 129,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_LON5",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 130,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_SYD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspaceBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 131,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_LON",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 132,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_LON5",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 133,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_DFW",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 134,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_ORD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 135,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_IAD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 136,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_HKG",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 137,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_SYD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspaceBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 138,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PDFW",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 139,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PDFW",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 140,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PDFW",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 141,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PDFW",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionDFW')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 142,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PIAD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 143,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PIAD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 144,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PIAD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 145,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PIAD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionIAD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 146,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PORD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 147,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PORD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 148,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PORD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 149,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PORD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionORD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 150,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PHKG",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 151,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PHKG",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 152,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PHKG",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 153,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PHKG",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionHKG')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 154,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PLON",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 155,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PLON",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 156,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PLON",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 157,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PLON",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 158,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PLON5",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 159,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PLON5",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 160,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PLON5",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 161,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PLON5",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionLON5')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 162,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_RDP_PSYD",
+            "properties": {
+              "description": "Allows RDP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "3389",
+              "sourceAddressPrefix": "[variables('rackspacepBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 163,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_SSH_PSYD",
+            "properties": {
+              "description": "Allows SSH",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "22",
+              "sourceAddressPrefix": "[variables('rackspacepBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 164,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_HTTPS_PSYD",
+            "properties": {
+              "description": "Allows HTTPS",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "443",
+              "sourceAddressPrefix": "[variables('rackspacepBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 165,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Allow_RAX_WinRM_PSYD",
+            "properties": {
+              "description": "Allows WinRM",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "5986",
+              "sourceAddressPrefix": "[variables('rackspacepBastionSYD')]",
+              "destinationAddressPrefix": "[parameters('subnetBASCIDR')]",
+              "access": "Allow",
+              "priority": 166,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_UDP",
+            "properties": {
+              "description": "Deny all inbound UDP",
+              "protocol": "Udp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4000,
+              "direction": "Inbound"
+            }
+          },
+          {
+            "name": "Deny_ALL_INBOUND_TCP",
+            "properties": {
+              "description": "Deny all inbound TCP",
+              "protocol": "Tcp",
+              "sourcePortRange": "*",
+              "destinationPortRange": "*",
+              "sourceAddressPrefix": "*",
+              "destinationAddressPrefix": "*",
+              "access": "Deny",
+              "priority": 4001,
+              "direction": "Inbound"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "name": "[variables('virtualNetworkName')]",
+      "type": "Microsoft.Network/virtualNetworks",
+      "location": "[resourceGroup().location]",
+      "tags": {
+        "displayName": "VirtualNetwork",
+        "Environment": "[parameters('environmentA')]",
+        "BuildDate": "[parameters('buildDate')]",
+        "BuildBy": "[parameters('buildBy')]"
+      },
+      "apiVersion": "2015-06-15",
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkSecurityGroups',variables('networkSecurityGroupAGWNameA'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups',variables('networkSecurityGroupOPSNameA'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups',variables('networkSecurityGroupDBNameA'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups',variables('networkSecurityGroupADNameA'))]",
+        "[resourceId('Microsoft.Network/networkSecurityGroups',variables('networkSecurityGroupBASName'))]"
+      ],
+      "properties": {
+        "addressSpace": {
+          "addressPrefixes": [
+            "[parameters('vnetCIDR')]"
+          ]
+        },
+        "subnets": [
+          {
+            "name": "[variables('SubnetAGWNameA')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetAGWCIDRA')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupAGWNameA'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('subnetOPSNameA')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetOPSCIDRA')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupOPSNameA'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('subnetDBNameA')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetDBCIDRA')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupDBNameA'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('subnetADNameA')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetADCIDRA')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupADNameA'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('subnetBASName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetBASCIDR')]",
+              "networkSecurityGroup": {
+                "id": "[resourceId('Microsoft.Network/networkSecurityGroups', variables('networkSecurityGroupBASName'))]"
+              }
+            }
+          },
+          {
+            "name": "[variables('GWSubnetName')]",
+            "properties": {
+              "addressPrefix": "[parameters('subnetGWCIDR')]"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "outputs": {
+    "vnetRG": {
+      "type": "string",
+      "value": "[resourceGroup().name]"
+    },
+    "vnetName": {
+      "type": "string",
+      "value": "[Variables('virtualNetworkName')]"
+    },
+    "subnetOPSNameA": {
+      "type": "string",
+      "value": "[variables('subnetOPSNameA')]"
+    },
+    "subnetOPSCIDRA": {
+      "type": "string",
+      "value": "[parameters('subnetOPSCIDRA')]"
+    },
+    "subnetDBNameA": {
+      "type": "string",
+      "value": "[variables('subnetDBNameA')]"
+    },
+    "subnetDBCIDRA": {
+      "type": "string",
+      "value": "[parameters('subnetDBCIDRA')]"
+    },
+    "subnetADNameA": {
+      "type": "string",
+      "value": "[variables('subnetADNameA')]"
+    },
+    "subnetADCIDRA": {
+      "type": "string",
+      "value": "[parameters('subnetADCIDRA')]"
+    },
+    "subnetAGWNameA": {
+      "type": "string",
+      "value": "[variables('subnetAGWNameA')]"
+    },
+    "subnetAGWCIDRA": {
+      "type": "string",
+      "value": "[parameters('subnetAGWCIDRA')]"
+    },
+    "subnetBASName": {
+      "type": "string",
+      "value": "[variables('subnetBASName')]"
+    },
+    "subnetBASCIDR": {
+      "type": "string",
+      "value": "[parameters('subnetBASCIDR')]"
+    }
+  }
+}

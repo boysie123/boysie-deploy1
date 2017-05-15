@@ -1,0 +1,39 @@
+﻿{
+  "$schema": "http://schema.management.azure.com/schemas/2014-04-01-preview/deploymentParameters.json",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "vnetName": {
+      "value": "VNET02"
+    },
+    "vnetCIDR": {
+      "value": "172.19.8.0/21"
+    },
+    "environmentA": {
+      "value": "Production"
+    },
+    "subnetOPSCIDRA": {
+      "value": "172.19.8.0/27"
+    },
+    "subnetDBCIDRA": {
+      "value": "172.19.10.0/24"
+    },
+    "subnetADCIDRA": {
+      "value": "172.19.8.64/27"
+    },
+    "subnetBASCIDR": {
+      "value": "172.19.8.96/27"
+    },
+    "subnetAGWCIDRA": {
+      "value": "172.19.15.0/27"
+    },
+    "subnetGWCIDR": {
+      "value": "172.19.15.192/27"
+    },
+    "buildDate": {
+      "value": "12/04/2017"
+    },
+    "buildBy": {
+      "value": "Mark Boys"
+    }
+  }
+}

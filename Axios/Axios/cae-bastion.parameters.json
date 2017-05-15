@@ -1,0 +1,40 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.1",
+    "parameters": {
+      "coreDeviceId": {
+        "value": "869356"
+      },
+        "bastionId": {
+            "value": "2"
+        },
+        "vmSize": {
+            "value": "Standard_A2_v2"
+        },
+
+      "vnetRG": {
+        "value": "CAE-RSG-CORE-MGT"
+      },
+      "vnetName": {
+        "value": "CAE-VNET01"
+      },
+      "subnetName": {
+        "value": "CAE-VNET01-RBAST01"
+      },
+        "operatingSystem": {
+            "value": "Windows"
+        },
+        "environment": {
+            "value": "Bastion"
+        },
+        "buildDate": {
+            "value": "20/4/2017"
+        },
+        "buildBy": {
+            "value": "Mark Boys"
+        },
+        "assetLocation": {
+            "value": "https://raxtemplates.blob.core.windows.net/development/"
+        }
+    }
+}

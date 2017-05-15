@@ -1,0 +1,114 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+      "operatingSystem": {
+        "value": "Windows Server 2012 R2"
+      },
+      "vmNamePrefix": {
+        "value": "CAE-PRD-VM-AD"
+      },
+        "vmSize": {
+            "value": "Standard_A2_v2"
+        },
+        "vmCount": {
+            "value": 2
+        },
+        "startIndex": {
+            "value": 3
+        },
+      "availabilitySetOption": {
+        "value": "New"
+      },
+        "availabilitySetName": {
+            "value": "cae-av-ad-prd"
+        },
+        "storageAccountOption": {
+            "value": "New"
+        },
+        "existingStorageAccount": {
+            "value": ""
+        },
+        "storageAccountType": {
+            "value": "Standard_LRS"
+        },
+        "numDataDisks": {
+            "value": 1
+        },
+        "dataDiskSize": {
+            "value": 1023
+        },
+        "diskCaching": {
+            "value": "None"
+        },
+      "vnetRG": {
+        "value": "CAE-RSG-CORE-MGT"
+      },
+        "vnetName": {
+            "value": "CAE-VNET01"
+        },
+      "subnetName": {
+        "value": "CAE-VNET01-AD-PRD"
+      },
+        "lbOption": {
+            "value": "None"
+        },
+        "dnsLabel": {
+            "value": ""
+        },
+        "joinADDoamin": {
+            "value": "No"
+        },
+        "domainToJoin": {
+            "value": "clouddomain.com"
+        },
+        "organizationalUnit": {
+            "value": ""
+        },
+        "domainAdminUsername": {
+            "value": "administrator"
+        },
+        "domainAdminPassword": {
+            "value": ""
+        },
+        "deployWebServer": {
+            "value": "None"
+        },
+        "timeZone": {
+            "value": "(UTC) UTC"
+        },
+        "applyOSPatches": {
+            "value": "Yes"
+        },
+        "antiMalware": {
+            "value": "Yes"
+        },
+        "logAnalytics": {
+            "value": "Yes"
+        },
+      "workspaceId": {
+        "value": "50e9a454-e62d-4aea-b202-2ab30315e5f5 "
+      },
+      "workspaceKey": {
+        "value": "9hTJ3U4dbFxaQRzKTf8SjzD9eVMkQMFPhbGRkbF+MqILo24+8r1bMa/y8rmbnMhndjJNABAOM2IQVZ6/oR8Knw=="
+      },
+        "environment": {
+            "value": "Production"
+        },
+        "buildDate": {
+            "value": "20/04/2017"
+        },
+        "buildBy": {
+            "value": "Mark Boys"
+        },
+        "RaxAutomationExclude": {
+            "value": "None"
+        },
+        "assetLocation": {
+            "value": "https://raxtemplates.blob.core.windows.net/master/"
+        },
+      "sasToken": {
+        "value": "?sv=2015-12-11&si=master-internal&sr=c&sig=48NfDxPbzQGQXLN%2FJsQuMcVsSExlgP3%2F62NsbCRtZ4U%3D"
+      }
+    }
+}

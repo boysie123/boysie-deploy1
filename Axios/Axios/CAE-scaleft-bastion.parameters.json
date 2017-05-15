@@ -1,0 +1,45 @@
+﻿{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.1",
+    "parameters": {
+      "coreDeviceId": {
+        "value": "869356"
+      },
+        "bastionId": {
+            "value": "2"
+        },
+        "vmSize": {
+            "value": "Standard_A1_v2"
+        },
+      "vnetRG": {
+        "value": "CAE-RSG-CORE-MGT"
+      },
+        "vnetName": {
+            "value": "CAE-VNET01"
+        },
+        "subnetName": {
+            "value": "CAE-VNET01-RBAST01"
+        },
+      "bastionScope": {
+        "value": "region"
+      },
+        "environment": {
+            "value": "Bastion"
+        },
+        "buildDate": {
+            "value": "20/04/2017"
+        },
+        "buildBy": {
+            "value": "Mark Boys"
+        },
+      "sftEnrollmentToken": {
+        "value": "eyJzIjoiNWYyZDcwZGYtZDVmZS00MzJlLWFjOWUtNDUyYzQ4NjE2YTJiIiwidSI6Imh0dHBzOi8vYXBwLnNjYWxlZnQuY29tIn0="
+      },
+        "assetLocation": {
+            "value": "https://raxtemplates.blob.core.windows.net/master/"
+        },
+      "sasToken": {
+        "value": "?sv=2015-12-11&si=master-internal&sr=c&sig=48NfDxPbzQGQXLN%2FJsQuMcVsSExlgP3%2F62NsbCRtZ4U%3D"
+      }
+    }
+}

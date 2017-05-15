@@ -1,0 +1,406 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "coreDeviceId": {
+            "type": "string",
+            "metadata": {
+                "description": "The CORE Device Number associated with this subscription",
+                "group": "General Settings",
+                "order": 1,
+                "label": "CORE Account Number",
+                "question": "What is the CORE device ID for this Azure subscription?",
+                "skip": "never"
+            }
+        },
+        "bastionId": {
+            "type": "string",
+            "metadata": {
+                "description": "The bastion identifier is a unique number which will be used in conjunction to the account number to create a unique name using the format: rlb<identifier>-<accountNumber>",
+                "group": "General Settings",
+                "order": 2,
+                "label": "Bastion Identifier",
+                "question": "What index do you want to use for this VM (will be appended at the end, leave 1 if first bastion)?",
+                "skip": "never"
+            },
+            "defaultValue": "1"
+        },
+        "vmSize": {
+            "type": "string",
+            "allowedValues": [
+                "Standard_A1",
+                "Standard_A1_v2"
+            ],
+            "metadata": {
+                "description": "The size of the VM Created",
+                "group": "General Settings",
+                "label": "Virtual Machine Size",
+                "order": 3,
+                "question": "What size do you want to use?",
+                "skip": "never"
+            },
+            "defaultValue": "Standard_A1_v2"
+        },
+        "vnetRG": {
+            "type": "string",
+            "defaultValue": "LOC-RSG-ALL-ENV",
+            "minLength": 1,
+            "metadata": {
+                "description": "The name of the Resource Group where we can find the VNET",
+                "group": "Network Settings",
+                "label": "VNet Resource Group Name",
+                "order": 1,
+                "question": "What is the name of the resource group where we can find the VNET to be used to connect these domain controllers?",
+                "skip": "never"
+            }
+        },
+        "vnetName": {
+            "type": "string",
+            "defaultValue": "LOC-VNET01",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of an existing VNet located in the vnetRG specified above.",
+                "group": "Network Settings",
+                "order": 2,
+                "label": "Virtual Network Name :",
+                "question": "What is the name of virtual network to use for these domain controllers?",
+                "skip": "never"
+            }
+        },
+        "subnetName": {
+            "type": "string",
+            "defaultValue": "LOC-VNET01-RBAST01",
+            "minLength": 1,
+            "metadata": {
+                "description": "Name of the Bastion Subnet inside of the provided VNET",
+                "group": "Network Settings",
+                "order": 3,
+                "label": "Bastion Subnet",
+                "question": "What is the name of the subnet to use for these domain controllers?",
+                "skip": "never"
+            }
+        },
+        "environment": {
+            "type": "string",
+            "allowedValues": [
+                "Bastion"
+            ],
+            "metadata": {
+                "description": "The Environment type we are building",
+                "group": "Tags",
+                "order": 1,
+                "label": "Rackspace Tag - Environment",
+                "question": "How would you classify this environment (Tag value)?",
+                "skip": "never"
+            },
+            "defaultValue": "Bastion"
+        },
+        "buildDate": {
+            "type": "string",
+            "metadata": {
+                "description": "The date of this build",
+                "group": "Tags",
+                "order": 2,
+                "label": "Rackspace Tag - Build Date",
+                "question": "Enter today's date mm/dd/yyyy",
+                "skip": "auto:ps:get-date -Format \"MM/dd/yyyy\""
+            },
+            "defaultValue": "01/01/2017"
+        },
+        "buildBy": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the engineer who build this environment",
+                "group": "Tags",
+                "order": 3,
+                "label": "Rackspace Tag - Build By",
+                "question": "Enter your name (First Last)",
+                "skip": "never"
+            },
+            "defaultValue": "First Last"
+        },
+        "bastionScope": {
+            "type": "string",
+            "metadata": {
+                "description": "The scope of network reach for this Bastion",
+                "group": "Tags",
+                "order": 4,
+                "label": "Rackspace Tag - Bastion Scope",
+                "question": "Will this bastion be able to reach all VMs on the same VNET, Region or ANY (Global) vm on the subscription?",
+                "skip": "never"
+            },
+            "allowedValues": [
+                "global",
+                "region",
+                "vnet"
+            ],
+            "defaultValue": "vnet"
+        },
+        "assetLocation": {
+            "type": "string",
+            "metadata": {
+                "group": "Deployment Settings",
+                "order": 1,
+                "label": "Asset location for linked templates",
+                "question": "Enter the asset location for linked templates",
+                "skip": "never"
+            },
+            "defaultValue": "https://raxtemplates.blob.core.windows.net/master/"
+        },
+        "sasToken": {
+            "type": "securestring",
+            "metadata": {
+                "description": "The sas token required to access the asset",
+                "group": "Deployment Settings",
+                "order": 2,
+                "label": "SAS Token for Asset location",
+                "question": "Enter the sas token to securely access the referenced asset location",
+                "skip": "never"
+            },
+            "defaultValue": "?sv=2015-12-11&si=policy-name&sr=c&sig=sometoken"
+        },
+        "sftEnrollmentToken": {
+            "type": "string",
+            "metadata": {
+                "description": "The ScaleFT enrollment token",
+                "group": "Deployment Settings",
+                "order": 3,
+                "label": "ScaleFT Enrollment Token",
+                "question": "Enter the ScaleFT enrollment token to register this server for remote access",
+                "skip": "never"
+            },
+            "defaultValue": ""
+        }
+    },
+    "variables": {
+        "storageTemplateURL": "[concat(parameters('assetLocation'),'storage/storageaccount.json')]",
+        "nicTemplateURL": "[concat(parameters('assetLocation'),'resources/partials/partial-nic-nolb-publicip.json')]",
+        "CustomizeBastion": "[concat(parameters('assetLocation'),'resources/extensions/customizeLinuxBastion.json')]",
+        "VMNamePrefix": "[concat('rlb',parameters('bastionId'),'-')]",
+        "storageAccountType": "Standard_LRS",
+        "virtualNetworkId": "[resourceId(parameters('vnetRG'), 'Microsoft.Network/virtualnetworks', parameters('vnetName'))]",
+        "subnetRef": "[concat(variables('virtualNetworkId'), '/subnets/', parameters('subnetName'))]",
+        "VMName": "[concat(variables('VMNamePrefix'), parameters('coreDeviceId'))]",
+        "imagePublisher": "OpenLogic",
+        "imageOffer": "CentOS",
+        "imageSKU": "7.3",
+        "imageVersion": "latest",
+        "dnsNameForPublicIP": "[variables('VMName')]",
+        "dataDiskSize": 1023,
+        "storageSuffix": "[toLower(replace(variables('VMName'),'-',''))]",
+        "adminUsername": "[concat(variables('VMName'), '-rack')]",
+        "adminPassword": "[concat('R4x',uniqueString(concat(resourceGroup().id, variables('VMName'))))]"
+    },
+    "resources": [
+        {
+            "name": "[concat('DiagnosticStorageAccount-',variables('vmName'))]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2015-01-01",
+            "dependsOn": [],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('storageTemplateURL'),parameters('sasToken'))]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "storageAccountType": {
+                        "value": "Standard_LRS"
+                    },
+                    "storageAccountCount": {
+                        "value": 1
+                    },
+                    "storageAccountSuffix": {
+                        "value": "diagnostics"
+                    },
+                    "environment": {
+                        "value": "[parameters('environment')]"
+                    },
+                    "buildBy": {
+                        "value": "[parameters('buildBy')]"
+                    },
+                    "buildDate": {
+                        "value": "[parameters('buildDate')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "[concat('StorageAccount-',variables('vmName'))]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2015-01-01",
+            "dependsOn": [],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('storageTemplateURL'),parameters('sasToken'))]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "storageAccountType": {
+                        "value": "[variables('storageAccountType')]"
+                    },
+                    "storageAccountCount": {
+                        "value": 1
+                    },
+                    "storageAccountSuffix": {
+                        "value": "[variables('storageSuffix')]"
+                    },
+                    "environment": {
+                        "value": "[parameters('environment')]"
+                    },
+                    "buildBy": {
+                        "value": "[parameters('buildBy')]"
+                    },
+                    "buildDate": {
+                        "value": "[parameters('buildDate')]"
+                    }
+                }
+            }
+        },
+        {
+            "name": "[concat(variables('vmName'), '-Nic')]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2015-01-01",
+            "dependsOn": [],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('nicTemplateURL'),parameters('sasToken'))]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "availabilitySetName": {
+                        "value": "NONE"
+                    },
+                    "vmName": {
+                        "value": "[variables('vmName')]"
+                    },
+                    "subnetRef": {
+                        "value": "[variables('subnetRef')]"
+                    },
+                    "dnsNameforPublicIP": {
+                        "value": "[variables('dnsNameForPublicIP')]"
+                    },
+                    "environment": {
+                        "value": "[parameters('environment')]"
+                    },
+                    "buildBy": {
+                        "value": "[parameters('buildBy')]"
+                    },
+                    "buildDate": {
+                        "value": "[parameters('buildDate')]"
+                    }
+                }
+            }
+        },
+        {
+            "apiVersion": "2015-06-15",
+            "type": "Microsoft.Compute/virtualMachines",
+            "name": "[variables('vmName')]",
+            "location": "[resourceGroup().location]",
+            "dependsOn": [
+                "[concat('DiagnosticStorageAccount-',variables('vmName'))]",
+                "[concat('StorageAccount-',variables('vmName'))]",
+                "[concat(variables('vmName'), '-Nic')]"
+            ],
+            "tags": {
+                "DisplayName": "VirtualMachine",
+                "Environment": "[parameters('environment')]",
+                "BuildDate": "[parameters('buildDate')]",
+                "BuildBy": "[parameters('buildBy')]",
+                "BastionScope": "[parameters('bastionScope')]",
+                "BastionType": "ScaleFT"
+            },
+            "properties": {
+                "hardwareProfile": {
+                    "vmSize": "[parameters('vmSize')]"
+                },
+                "osProfile": {
+                    "computerName": "[variables('VMName')]",
+                    "adminUsername": "[variables('adminUsername')]",
+                    "adminPassword": "[variables('adminPassword')]"
+                },
+                "diagnosticsProfile": {
+                    "bootDiagnostics": {
+                        "enabled": true,
+                        "storageUri": "[concat('http://', reference(concat('DiagnosticStorageAccount-',variables('vmName'))).outputs.storageAccounts.value[0], '.blob.core.windows.net')]"
+                    }
+                },
+                "storageProfile": {
+                    "imageReference": {
+                        "publisher": "[variables('imagePublisher')]",
+                        "offer": "[variables('imageOffer')]",
+                        "sku": "[variables('imageSKU')]",
+                        "version": "[variables('imageVersion')]"
+                    },
+                    "osDisk": {
+                        "name": "[concat(variables('vmName'),'-OS')]",
+                        "vhd": {
+                            "uri": "[concat('http://', reference(concat('StorageAccount-',variables('vmName'))).outputs.storageAccounts.value[0], '.blob.core.windows.net/vhds/', variables('vmName'),'-os.vhd')]"
+                        },
+                        "caching": "ReadWrite",
+                        "createOption": "FromImage"
+                    }
+                },
+                "networkProfile": {
+                    "networkInterfaces": [
+                        {
+                            "id": "[resourceId('Microsoft.Network/networkInterfaces', concat(variables('vmName'), '-nic' ))]"
+                        }
+                    ]
+                }
+            }
+        },
+        {
+            "name": "[concat(variables('vmName'),  '-CustomizeBastion')]",
+            "type": "Microsoft.Resources/deployments",
+            "apiVersion": "2015-01-01",
+            "dependsOn": [
+                "[variables('vmName')]"
+            ],
+            "properties": {
+                "mode": "Incremental",
+                "templateLink": {
+                    "uri": "[concat(variables('CustomizeBastion'),parameters('sasToken'))]",
+                    "contentVersion": "1.0.0.0"
+                },
+                "parameters": {
+                    "vmName": {
+                        "value": "[variables('vmName')]"
+                    },
+                    "sftEnrollmentToken": {
+                        "value": "[parameters('sftEnrollmentToken')]"
+                    },
+                    "publicIP": {
+                        "value": "[reference(concat(variables('vmName'),'-nic' )).outputs.publicIpAddress.value]"
+                    },
+                    "sasToken": {
+                        "value": "[parameters('sasToken')]"
+                    },
+                    "assetLocation": {
+                        "value": "[parameters('assetLocation')]"
+                    }
+                }
+            }
+        }
+    ],
+    "outputs": {
+        "vmName": {
+            "type": "string",
+            "value": "[variables('vmName')]"
+        },
+        "adminUsername": {
+            "type": "string",
+            "value": "[variables('adminUsername')]"
+        },
+        "publicDNS": {
+            "type": "string",
+            "value": "[reference(concat(variables('vmName'),'-nic' )).outputs.publicDNS.value ]"
+        },
+        "publicIpAddress": {
+            "type": "string",
+            "value": "[reference(concat(variables('vmName'),'-nic' )).outputs.publicIpAddress.value ]"
+        }
+    }
+}
